@@ -1,0 +1,29 @@
+pkg load image
+
+input_folder = 'C:/Users/parke/OneDrive/Desktop/Computation/project/lfw-deepfunneled/lfw-deepfunneled/Ariel_Sharon';
+output_folder = [input_folder '/gray'];
+
+% Create output folder if it doesn't exist
+if ~exist(output_folder, 'dir')
+    mkdir(output_folder);
+end
+
+files = dir(fullfile(input_folder, '*.jpg'));
+
+for k = 1:length(files)
+    filename = files(k).name;
+    filepath = fullfile(input_folder, filename);
+
+    img = imread(filepath);
+
+    if ndims(img) == 3
+        gray = rgb2gray(img);
+    else
+        gray = img;
+    end
+
+    outpath = fullfile(output_folder, filename);
+    imwrite(gray, outpath);
+
+    printf('Converted: %s\n', filename);
+end
