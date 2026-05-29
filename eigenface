@@ -1,0 +1,52 @@
+pkg load image
+
+folder = 'C:/Users/parke/OneDrive/Desktop/Computation/project/lfw-deepfunneled/lfw-deepfunneled/Ariel_Sharon';
+files = dir(fullfile(folder, '*.jpg'));
+
+% --- Load images into matrix ---
+X = [];
+for k = 1:length(files)
+    img = imread(fullfile(folder, files(k).name));
+
+    if ndims(img) == 3
+        img = rgb2gray(img);
+    end
+
+    img = im2double(img);
+
+    if k == 1
+        [h, w] = size(img);
+    end
+
+    X(:, k) = img(:);  % flatten image into column vector
+end
+
+% --- Compute mean face ---
+mean_face = mean(X, 2);
+
+% --- Subtract mean ---
+A = X - mean_face;
+
+% --- PCA via covariance trick ---
+C = A' * A;                 % smaller matrix
+[V, D] = eig(C);            % eigen decomposition
+
+eigenfaces = A * V;         % project back to image space
+
+% --- Normalize eigenfaces ---
+for i = 1:size(eigenfaces, 2)
+    eigenfaces(:, i) = eigenfaces(:, i) / norm(eigenfaces(:, i));
+end
+
+% --- Display first eigenface ---
+ef1 = reshape(eigenfaces(:, end), h, w); % largest eigenvalue is last
+
+imshow(ef1, []);
+
+figure;
+for i = 1:9
+    subplot(3,3,i);
+    ef = reshape(eigenfaces(:, end-i+1), h, w);
+    imshow(ef, []);
+    title(['Eigenface ' num2str(i)]);
+end
