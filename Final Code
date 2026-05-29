@@ -1,0 +1,179 @@
+pkg load image
+clear; clc; close all;
+
+% ================================
+% Eigenfaces Face Recognition Demo
+% ================================
+
+% -------- SETTINGS --------
+dataset_path = 'C:\Users\parke\OneDrive\Desktop\Computation\project\lfw-deepfunneled\lfw-deepfunneled';   % root folder
+img_ext = '*.jpg';          % adjust if needed
+img_size = [100 100];       % all images resized to 100x100
+k = 20;                    % number of eigenfaces
+train_ratio = 0.7;
+
+% -------- LOAD DATASET --------
+fprintf("Loading dataset...\n");
+
+X = [];
+labels = [];
+label_map = containers.Map(); % map folder name -> numeric label
+label_count = 0;
+
+people = dir(dataset_path);
+people = people([people.isdir]);                     % only folders
+people = people(~ismember({people.name}, {'.','..'}));  % remove . and ..
+
+for p = 1:length(people)
+    person_name = people(p).name;
+    person_path = fullfile(dataset_path, person_name);
+
+    img_files = dir(fullfile(person_path, img_ext));
+
+    for i = 1:length(img_files)
+        filepath = fullfile(person_path, img_files(i).name);
+        img = imread(filepath);
+
+        if size(img,3) == 3
+            img = rgb2gray(img);
+        end
+
+        img = im2double(img);
+        img = imresize(img, img_size);  % force same size
+
+        if isempty(X)
+            X = img(:);                % initialize X
+        else
+            X(:, end+1) = img(:);      % append subsequent images
+        end
+
+        % assign numeric label
+        if ~isKey(label_map, person_name)
+            label_count = label_count + 1;
+            label_map(person_name) = label_count;
+        end
+        labels(end+1) = label_map(person_name);
+    end
+end
+
+labels = labels(:)';  % make it row vector
+fprintf("Loaded %d images, %d classes\n", size(X,2), label_count);
+
+% Optional: check all class names
+disp("Classes found:");
+disp(keys(label_map));
+
+
+
+% -------- TRAIN / TEST SPLIT --------
+n = size(X,2);
+idx = randperm(n);
+
+train_n = round(train_ratio * n);
+train_idx = idx(1:train_n);
+test_idx  = idx(train_n+1:end);
+
+X_train = X(:, train_idx);
+y_train = labels(train_idx);
+
+X_test = X(:, test_idx);
+y_test = labels(test_idx);
+
+% -------- COMPUTE EIGENFACES --------
+fprintf("Computing eigenfaces...\n");
+
+mean_face = mean(X_train, 2);
+A = X_train - mean_face;
+
+L = A' * A;
+[V, D] = eig(L);
+
+% sort eigenvectors by eigenvalues (descending)
+[eigvals, order] = sort(diag(D), 'descend');
+V = V(:, order);
+
+eigfaces = A * V;
+
+% normalize eigenfaces
+for i = 1:size(eigfaces,2)
+    eigfaces(:,i) = eigfaces(:,i) / norm(eigfaces(:,i) + eps);
+end
+
+% keep top k
+eigfaces = eigfaces(:, 1:k);
+
+% project training data
+projected_train = eigfaces' * A;
+
+% -------- TESTING --------
+fprintf("Testing...\n");
+
+predictions = zeros(1, length(test_idx));
+
+for i = 1:length(test_idx)
+    test_vec = X_test(:,i);
+    test_vec = test_vec - mean_face;
+
+    proj_test = eigfaces' * test_vec;
+
+    % nearest neighbor
+    dists = sum((projected_train - proj_test).^2, 1);
+    [~, idx_min] = min(dists);
+
+    predictions(i) = y_train(idx_min);
+end
+
+% -------- EVALUATION --------
+fprintf("\n=== Classification Report ===\n");
+
+% Accuracy
+accuracy = sum(predictions == y_test) / length(y_test);
+fprintf("Accuracy: %.2f%%\n", accuracy * 100);
+
+% Confusion Matrix
+classes = unique(labels);
+n_classes = length(classes);
+conf_mat = zeros(n_classes);
+
+for i = 1:length(y_test)
+    true_c = y_test(i);
+    pred_c = predictions(i);
+    conf_mat(true_c, pred_c) += 1;
+end
+
+fprintf("\nConfusion Matrix:\n");
+disp(conf_mat);
+
+% Precision, Recall, F1
+precision = zeros(n_classes,1);
+recall = zeros(n_classes,1);
+f1 = zeros(n_classes,1);
+
+for i = 1:n_classes
+    TP = conf_mat(i,i);
+    FP = sum(conf_mat(:,i)) - TP;
+    FN = sum(conf_mat(i,:)) - TP;
+
+    precision(i) = TP / (TP + FP + eps);
+    recall(i)    = TP / (TP + FN + eps);
+    f1(i)        = 2 * (precision(i)*recall(i)) / (precision(i)+recall(i)+eps);
+end
+
+fprintf("\nClass-wise Metrics:\n");
+for i = 1:n_classes
+    fprintf("Class %d -> Precision: %.2f | Recall: %.2f | F1: %.2f\n", ...
+        i, precision(i), recall(i), f1(i));
+end
+
+% -------- OPTIONAL: SHOW MEAN FACE --------
+figure;
+imshow(reshape(mean_face, img_size));
+title('Mean Face');
+
+% -------- OPTIONAL: SHOW EIGENFACES --------
+figure;
+for i = 1:min(k, 9)
+    subplot(3,3,i);
+    imshow(reshape(eigfaces(:,i), img_size), []);
+    title(['Eigenface ' num2str(i)]);
+end
