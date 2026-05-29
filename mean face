@@ -1,0 +1,32 @@
+pkg load image
+
+folder = 'C:\Users\parke\OneDrive\Desktop\Computation\project\lfw-deepfunneled\lfw-deepfunneled\Ariel_Sharon\gray';
+files = dir(fullfile(folder, '*.jpg'));
+
+sum_img = 0;
+count = 0;
+
+for k = 1:length(files)
+    filepath = fullfile(folder, files(k).name);
+
+    img = imread(filepath);
+
+    % Convert to grayscale if needed
+    if ndims(img) == 3
+        img = rgb2gray(img);
+    end
+
+    img = im2double(img);  % Convert to double
+
+    if count == 0
+        sum_img = zeros(size(img)); % Initialize accumulator
+    end
+
+    sum_img += img;
+    count += 1;
+end
+
+avg_face = sum_img / count;
+
+imshow(avg_face);
+imwrite(avg_face, 'average_face.jpg');
